@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mr. Fries</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Add Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <style>
+    body{font-family:Arial, sans-serif;margin:0;background:#fff8f0;color:#333}
+    header{background:#ff7f50;color:#fff;padding:1rem;text-align:center}
+    h1{margin:0;font-size:1.8rem}
+    .container{max-width:900px;margin:auto;padding:1rem}
+    .card{background:#ffe5b4;margin:1rem 0;padding:1rem;border-radius:12px}
+    ul{list-style:none;padding:0}
+    li{background:#fff;padding:.5rem;border-radius:8px;margin:.3rem 0;display:flex;justify-content:space-between;align-items:center}
+    .btn{background:#ff7f50;color:#fff;border:none;padding:.7rem 1rem;border-radius:8px;cursor:pointer;text-decoration:none;display:inline-block;margin:.3rem 0;font-size:1rem}
+    .btn:hover{background:#e5673f}
+    footer{text-align:center;margin:2rem 0;font-size:.9rem;color:#555}
+    #admin-panel{display:none}
+    #login-box{display:none;text-align:center;padding:1rem}
+    input,select,textarea{padding:.6rem;border:1px solid #ccc;border-radius:6px;width:100%;margin:.3rem 0;font-size:1rem}
+    textarea{min-height:60px;resize:vertical}
+    .remove-btn{background:#f55;color:#fff;border:none;padding:.3rem .6rem;border-radius:6px;cursor:pointer;margin-left:.5rem}
+    #calc p{margin:.3rem 0}
+    .review{background:#fff;padding:.6rem;border-radius:8px;margin:.6rem 0;font-size:.95rem}
+    .stars{color:gold}
+    .reply{margin-top:.5rem;padding:.5rem;background:#f9f9f9;border-left:3px solid #ff7f50;font-size:.9rem}
+    /* Splash Screen */
+    #splash{
+      position:fixed;
+      top:0;left:0;width:100%;height:100%;
+      background:#ff7f50;color:#fff;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      font-size:2rem;z-index:9999;
+    }
+    #splash p{font-size:1.2rem;margin-top:1rem}
+    #splash.fade{opacity:0;transition:opacity 1s ease-out;pointer-events:none}
+    /* Quantity Control */
+    .qty-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 10px;
+    }
+    .qty-control button {
+      background: #ff7f50;
+      color: #fff;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qty-control button:hover {background:#e5673f}
+    .qty-control span {
+      min-width: 20px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      background: #4CAF50;
+      color: white;
+      border-radius: 5px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+      z-index: 1000;
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .notification.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .firebase-config {
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1rem 0;
+    }
+    @media (max-width:600px){
+      header h1{font-size:1.5rem}
+      .card{padding:.8rem}
+      .btn{width:100%;padding:.8rem;font-size:1rem}
+      input,select,textarea{font-size:1rem}
+      li{flex-direction:column;align-items:flex-start}
+      .qty-control{margin-top:10px;margin-left:0}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Splash Screen -->
+<div id="splash">
+  <h1>🍟 Mr. Fries</h1>
+  <p>Welcome to the Fries World!</p>
+</div>
+
+<header>
+  <h1>🍟 Mr. Fries</h1>
+  <p>Small D Ground near Donner | Phone: 
+    <a href="tel:03018655584" style="color:#fff;text-decoration:underline">03018655584</a></p>
+  <p>Owner: Akhter Rasool Sb</p>
+  <button class="btn" onclick="showLogin()">Admin</button>
+</header>
+
+<div class="container">
+  <!-- Firebase Configuration -->
+  <div id="firebase-config" class="card" style="display: none;">
+    <h2>Firebase Setup Required</h2>
+    <p>To enable multi-device sync, you need to set up Firebase:</p>
+    <ol>
+      <li>Go to <a href="https://console.firebase.google.com/" target="_blank">Firebase Console</a></li>
+      <li>Create a new project</li>
+      <li>Enable Firestore Database</li>
+      <li>Copy your config and paste it below</li>
+    </ol>
+    <textarea id="firebase-config-input" placeholder='Paste your Firebase config here (e.g., {apiKey: "YOUR_API_KEY", authDomain: "...", projectId: "...", storageBucket: "...", messagingSenderId: "...", appId: "..."})'></textarea>
+    <button class="btn" onclick="saveFirebaseConfig()">Save Configuration</button>
+  </div>
+
+  <div id="site-view">
+    <div class="card">
+      <h2>Menu</h2>
+      <ul id="menu-list"></ul>
+    </div>
+
+    <div class="card" id="calc">
+      <h2>🧾 Calculator</h2>
+      <p>Subtotal: Rs.<span id="subtotal">0</span></p>
+      <p>Discount: Rs.<span id="discount">0</span></p>
+      <p><b>Total: Rs.<span id="final">0</span></b></p>
+    </div>
+
+    <div class="card">
+      <h2>Discount Packages</h2>
+      <p>Order up to Rs.1500 to achieve <b>10% Discount</b> 🎉</p>
+    </div>
+
+    <div class="card">
+      <h2>Place Order</h2>
+      <label>Your Name: <input id="cust-name" type="text"></label>
+      <label>Address/Note: <input id="cust-note" type="text"></label>
+      <button class="btn" onclick="orderWhatsApp()">Order on WhatsApp</button>
+    </div>
+
+    <div class="card">
+      <h2>⭐ Customer Reviews</h2>
+      <label>Name: <input id="rev-name" type="text"></label>
+      <label>Rating:
+        <select id="rev-rating">
+          <option value="5">⭐⭐⭐⭐⭐</option>
+          <option value="4">⭐⭐⭐⭐</option>
+          <option value="3">⭐⭐⭐</option>
+          <option value="2">⭐⭐</option>
+          <option value="1">⭐</option>
+        </select>
+      </label>
+      <label>Review:<textarea id="rev-text"></textarea></label>
+      <button class="btn" onclick="addReview()">Submit Review</button>
+      <div id="reviews-list"></div>
+    </div>
+  </div>
+
+  <!-- Login Box -->
+  <div id="login-box" class="card">
+    <h2>Admin Login</h2>
+    <input type="password" id="admin-pass" placeholder="Enter Password">
+    <button class="btn" onclick="checkLogin()">Login</button>
+    <button class="btn" onclick="cancelLogin()">Cancel</button>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="admin-panel" class="card">
+    <h2>Admin Panel</h2>
+    <h3>Menu Manager</h3>
+    <ul id="admin-menu-list"></ul>
+    <input id="new-item-name" placeholder="Item name">
+    <input id="new-item-price" type="number" placeholder="Price">
+    <button class="btn" onclick="addItem()">Add Item</button>
+    <hr>
+    <h3>Reviews Manager</h3>
+    <div id="admin-reviews"></div>
+    <hr>
+    <h3>Change Password</h3>
+    <input type="password" id="new-pass" placeholder="New Password">
+    <button class="btn" onclick="changePassword()">Change</button>
+    <hr>
+    <button class="btn" onclick="closeAdmin()">Close Admin</button>
+  </div>
+</div>
+
+<footer>&copy; 2025 Mr. Fries</footer>
+
+<div id="notification" class="notification"></div>
+
+<script>
+  // Firebase configuration - YOUR CONFIG IS ALREADY HERE
+  const firebaseConfig = {
+    apiKey: "AIzaSyB60wYJqnOqZMC15dhkShA02Ix7VfLzOZQ",
+    authDomain: "mr-fries-8824f.firebaseapp.com",
+    projectId: "mr-fries-8824f",
+    storageBucket: "mr-fries-8824f.firebasestorage.app",
+    messagingSenderId: "781763549420",
+    appId: "1:781763549420:web:5a85e2fc5d2aa5ca26edc9",
+    measurementId: "G-YJQ3LY5YMX"
+  };
+  
+  let db = null;
+  
+  // Data storage key
+  const STORAGE_KEY = "mr_fries_data";
+  const FIREBASE_CONFIG_KEY = "firebase_config";
+  
+  // Default data
+  const defaultData = {
+    menu: [
+      {name: "Regular Fries", price: 200},
+      {name: "Cheese Fries", price: 250},
+      {name: "Chili Cheese Fries", price: 300},
+      {name: "BBQ Fries", price: 280},
+      {name: "Loaded Fries", price: 350}
+    ],
+    password: "admin123",
+    reviews: []
+  };
+
+  let DATA = {...defaultData};
+  let quantities = [];
+
+  // Initialize Firebase
+  function initializeFirebase() {
+    try {
+      // Initialize with your provided config
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      document.getElementById('firebase-config').style.display = 'none';
+      setupRealtimeUpdates();
+      return true;
+    } catch (error) {
+      console.error("Error initializing Firebase:", error);
+      showNotification("Firebase initialization failed", false);
+      return false;
+    }
+  }
+
+  // Set up real-time updates from Firestore
+  function setupRealtimeUpdates() {
+    db.collection("restaurantData").doc("mainData")
+      .onSnapshot((doc) => {
+        if (doc.exists) {
+          const newData = doc.data();
+          DATA = newData;
+          initQuantities();
+          renderMenu();
+          renderReviews();
+          showNotification("Data updated from another device!");
+        }
+      });
+  }
+
+  // Initialize quantities array
+  function initQuantities() {
+    quantities = new Array(DATA.menu.length).fill(0);
+  }
+
+  // Show notification
+  function showNotification(message, isSuccess = true) {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.style.background = isSuccess ? '#4CAF50' : '#f44336';
+    notification.classList.add('show');
+    
+    setTimeout(() => {
+      notification.classList.remove('show');
+    }, 3000);
+  }
+
+  // Load data from Firestore or localStorage
+  async function loadData() {
+    try {
+      if (db) {
+        // Try to load from Firestore
+        const doc = await db.collection("restaurantData").doc("mainData").get();
+        if (doc.exists) {
+          DATA = doc.data();
+          showNotification("Data loaded from cloud!");
+        } else {
+          // First time setup - save default data to Firestore
+          DATA = {...defaultData};
+          await saveData();
+          showNotification("Welcome to Mr. Fries! Initial setup complete.");
+        }
+      } else {
+        // Fall back to localStorage
+        const storedData = localStorage.getItem(STORAGE_KEY);
+        if (storedData) {
+          DATA = JSON.parse(storedData);
+          showNotification("Data loaded from local storage!");
+        } else {
+          // First time setup
+          DATA = {...defaultData};
+          saveData();
+          showNotification("Welcome to Mr. Fries! Initial setup complete.");
+        }
+      }
+    } catch (e) {
+      console.error("Error loading data:", e);
+      DATA = {...defaultData};
+      saveData();
+      showNotification("Error loading data. Using default data.", false);
+    }
+    initQuantities();
+    renderMenu();
+    renderReviews();
+  }
+
+  // Save to Firestore or localStorage
+  async function saveData() {
+    try {
+      if (db) {
+        // Save to Firestore
+        await db.collection("restaurantData").doc("mainData").set(DATA);
+        showNotification("Data saved to cloud!");
+      } else {
+        // Fall back to localStorage
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+      }
+      return true;
+    } catch (e) {
+      console.error("Error saving data:", e);
+      // Fall back to localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+        showNotification("Data saved locally (cloud unavailable)", false);
+        return true;
+      } catch (localError) {
+        console.error("Error saving to localStorage:", localError);
+        showNotification("Error saving data.", false);
+        return false;
+      }
+    }
+  }
+
+  // --- UI Functions ---
+  function renderMenu() {
+    const ul = document.getElementById("menu-list");
+    if (!ul) return;
+    
+    ul.innerHTML = "";
+    DATA.menu.forEach((item, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span>${item.name} - Rs.${item.price}</span>
+        <div class="qty-control">
+          <button onclick="changeQty(${i}, -1)">-</button>
+          <span id="qty-${i}">${quantities[i] || 0}</span>
+          <button onclick="changeQty(${i}, 1)">+</button>
+        </div>
+      `;
+      ul.appendChild(li);
+    });
+    updateCalc();
+    renderAdminMenu();
+  }
+
+  function changeQty(i, delta) {
+    quantities[i] = (quantities[i] || 0) + delta;
+    if (quantities[i] < 0) quantities[i] = 0;
+    
+    document.getElementById("qty-"+i).innerText = quantities[i];
+    updateCalc();
+  }
+
+  function updateCalc() {
+    let subtotal = 0;
+    DATA.menu.forEach((item, i) => {
+      subtotal += (quantities[i] || 0) * item.price;
+    });
+    
+    let discount = (subtotal >= 1500) ? Math.round(subtotal * 0.1) : 0;
+    let total = subtotal - discount;
+    
+    document.getElementById("subtotal").innerText = subtotal;
+    document.getElementById("discount").innerText = discount;
+    document.getElementById("final").innerText = total;
+  }
+
+  function orderWhatsApp() {
+    let items = [];
+    let subtotal = 0;
+    
+    DATA.menu.forEach((item, i) => {
+      const qty = quantities[i] || 0;
+      if (qty > 0) {
+        const itemTotal = qty * item.price;
+        items.push(`${item.name} x${qty} = Rs.${itemTotal}`);
+        subtotal += itemTotal;
+      }
+    });
+    
+    if (items.length === 0) { 
+      showNotification("Please select items first", false);
+      return; 
+    }
+    
+    let discount = (subtotal >= 1500) ? Math.round(subtotal * 0.1) : 0;
+    let total = subtotal - discount;
+    
+    const name = document.getElementById("cust-name").value || "Customer";
+    const note = document.getElementById("cust-note").value || "";
+    
+    const msg = `Name: ${name}\n\nOrder:\n${items.join("\n")}\n\nSubtotal: Rs.${subtotal}\nDiscount: Rs.${discount}\nTotal: Rs.${total}\n\nAddress/Note: ${note}`;
+    const phone = "923018655584";
+    
+    window.open("https://wa.me/" + phone + "?text=" + encodeURIComponent(msg), "_blank");
+    showNotification("Opening WhatsApp with your order!");
+  }
+
+  // --- Reviews ---
+  function renderReviews() {
+    const list = document.getElementById("reviews-list");
+    if (!list) return;
+    
+    list.innerHTML = "";
+    
+    if (DATA.reviews.length === 0) {
+      list.innerHTML = "<p>No reviews yet. Be the first to review!</p>";
+      return;
+    }
+    
+    DATA.reviews.forEach((r, i) => {
+      const div = document.createElement("div");
+      div.className = "review";
+      div.innerHTML = `
+        <b>${r.name}</b> <span class="stars">${"⭐".repeat(r.rating)}</span><br>
+        ${r.text}
+        ${r.reply ? `<div class="reply"><b>Admin:</b> ${r.reply}</div>` : ""}
+      `;
+      list.appendChild(div);
+    });
+    
+    renderAdminReviews();
+  }
+  
+  async function addReview() {
+    const name = document.getElementById("rev-name").value.trim();
+    const rating = +document.getElementById("rev-rating").value;
+    const text = document.getElementById("rev-text").value.trim();
+    
+    if (!name || !text) { 
+      showNotification("Please enter your name and review", false);
+      return; 
+    }
+    
+    // Add review with timestamp
+    DATA.reviews.unshift({
+      name, 
+      rating, 
+      text, 
+      reply: "",
+      date: new Date().toISOString()
+    });
+    
+    if (await saveData()) {
+      // Clear form
+      document.getElementById("rev-name").value = "";
+      document.getElementById("rev-rating").value = "5";
+      document.getElementById("rev-text").value = "";
+      
+      renderReviews();
+      showNotification("Review submitted successfully!");
+    } else {
+      showNotification("Failed to save review", false);
+    }
+  }
+
+  function renderAdminReviews() {
+    const div = document.getElementById("admin-reviews");
+    if (!div) return;
+    
+    div.innerHTML = "";
+    
+    if (DATA.reviews.length === 0) {
+      div.innerHTML = "<p>No reviews to manage.</p>";
+      return;
+    }
+    
+    DATA.reviews.forEach((r, i) => {
+      const box = document.createElement("div");
+      box.className = "review";
+      box.innerHTML = `
+        <b>${r.name}</b> ${"⭐".repeat(r.rating)}<br>
+        ${r.text}
+        <br>
+        <textarea id="reply-${i}" placeholder="Type your reply here">${r.reply || ''}</textarea>
+        <button class="btn" onclick="saveReply(${i})">Save Reply</button>
+        <button class="remove-btn" onclick="removeReview(${i})">Delete Review</button>
+      `;
+      div.appendChild(box);
+    });
+  }
+  
+  async function saveReply(i) {
+    const replyText = document.getElementById("reply-"+i).value.trim();
+    DATA.reviews[i].reply = replyText;
+    
+    if (await saveData()) {
+      renderReviews();
+      showNotification("Reply saved successfully!");
+    } else {
+      showNotification("Failed to save reply", false);
+    }
+  }
+  
+  async function removeReview(i) {
+    if (confirm("Are you sure you want to delete this review?")) {
+      DATA.reviews.splice(i, 1);
+      
+      if (await saveData()) {
+        renderReviews();
+        showNotification("Review deleted successfully!");
+      } else {
+        showNotification("Failed to delete review", false);
+      }
+    }
+  }
+
+  // --- Admin ---
+  function renderAdminMenu() {
+    const ul = document.getElementById("admin-menu-list");
+    if (!ul) return;
+    
+    ul.innerHTML = "";
+    DATA.menu.forEach((item, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        ${item.name} - Rs.${item.price} 
+        <button class="remove-btn" onclick="removeItem(${i})">X</button>
+      `;
+      ul.appendChild(li);
+    });
+  }
+
+  async function addItem() {
+    const name = document.getElementById("new-item-name").value.trim();
+    const price = +document.getElementById("new-item-price").value;
+    
+    if (!name || !price || price <= 0) { 
+      showNotification("Please enter a valid name and price", false);
+      return; 
+    }
+    
+    DATA.menu.push({name, price});
+    quantities.push(0);
+    
+    if (await saveData()) {
+      // Clear form
+      document.getElementById("new-item-name").value = "";
+      document.getElementById("new-item-price").value = "";
+      
+      renderMenu();
+      showNotification("Menu item added successfully!");
+    } else {
+      showNotification("Failed to add menu item", false);
+    }
+  }
+  
+  async function removeItem(i) {
+    DATA.menu.splice(i, 1);
+    quantities.splice(i, 1);
+    
+    if (await saveData()) {
+      renderMenu();
+      showNotification("Menu item removed successfully!");
+    } else {
+      showNotification("Failed to remove menu item", false);
+    }
+  }
+
+  function showLogin() { 
+    document.getElementById("login-box").style.display = "block"; 
+  }
+  
+  function cancelLogin() { 
+    document.getElementById("login-box").style.display = "none"; 
+    document.getElementById("admin-pass").value = "";
+  }
+  
+  function checkLogin() {
+    const password = document.getElementById("admin-pass").value;
+    
+    if (password === DATA.password) {
+      document.getElementById("login-box").style.display = "none";
+      document.getElementById("admin-panel").style.display = "block";
+      document.getElementById("admin-pass").value = "";
+      renderAdminMenu();
+      renderAdminReviews();
+      showNotification("Admin login successful!");
+    } else { 
+      showNotification("Wrong password. Please try again.", false);
+    }
+  }
+  
+  function closeAdmin() { 
+    document.getElementById("admin-panel").style.display = "none"; 
+  }
+  
+  async function changePassword() {
+    const newPassword = document.getElementById("new-pass").value.trim();
+    
+    if (newPassword.length < 4) { 
+      showNotification("Password must be at least 4 characters long", false);
+      return; 
+    }
+    
+    DATA.password = newPassword;
+    
+    if (await saveData()) {
+      document.getElementById("new-pass").value = "";
+      showNotification("Password changed successfully!");
+    } else {
+      showNotification("Failed to change password", false);
+    }
+  }
+
+  // Splash Screen
+  document.addEventListener("DOMContentLoaded", async () => {
+    const splash = document.getElementById("splash");
+    
+    // Initialize Firebase first
+    const firebaseInitialized = initializeFirebase();
+    
+    if (firebaseInitialized) {
+      await loadData();
+    } else {
+      // If Firebase not configured, just load from localStorage
+      await loadData();
+    }
+    
+    setTimeout(() => {
+      splash.classList.add("fade");
+      setTimeout(() => {
+        splash.style.display = "none";
+      }, 1000);
+    }, 2500);
+  });
+</script>
+</body>
+</html>
